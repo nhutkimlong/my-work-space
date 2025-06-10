@@ -60,11 +60,31 @@ export interface Event {
 
 class SupabaseService {
   // Documents
-  async getDocuments() {
-    const { data, error } = await supabase
+  async getDocuments(filters?: {
+    type?: string;
+    status?: string;
+    priority?: string;
+    search?: string;
+  }) {
+    let query = supabase
       .from('documents')
       .select('*')
       .order('created_at', { ascending: false })
+
+    if (filters?.type) {
+      query = query.eq('document_type', filters.type)
+    }
+    if (filters?.status) {
+      query = query.eq('status', filters.status)
+    }
+    if (filters?.priority) {
+      query = query.eq('priority', filters.priority)
+    }
+    if (filters?.search) {
+      query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`)
+    }
+
+    const { data, error } = await query
     
     if (error) throw error
     return data as Document[]
@@ -351,36 +371,6 @@ class SupabaseService {
       .select()
       .single()
     
-    if (error) throw error
-    return data
-  }
-
-  async getDocuments(filters?: {
-    type?: string;
-    status?: string;
-    priority?: string;
-    search?: string;
-  }) {
-    let query = supabase
-      .from('documents')
-      .select('*')
-      .is('is_deleted', false)
-      .order('created_at', { ascending: false })
-
-    if (filters?.type) {
-      query = query.eq('document_type', filters.type)
-    }
-    if (filters?.status) {
-      query = query.eq('status', filters.status)
-    }
-    if (filters?.priority) {
-      query = query.eq('priority', filters.priority)
-    }
-    if (filters?.search) {
-      query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`)
-    }
-
-    const { data, error } = await query
     if (error) throw error
     return data
   }

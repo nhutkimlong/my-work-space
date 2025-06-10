@@ -5,7 +5,10 @@
 
 [functions]
   node_bundler = "esbuild"
-  external_node_modules = ["@google/generative-ai", "googleapis"]
+  external_node_modules = ["@google/generative-ai", "googleapis", "google-auth-library"]
+
+[[plugins]]
+  package = "@netlify/plugin-functions-install-core"
 
 [build.environment]
   VITE_ENABLE_AI_PROCESSING = "true"
