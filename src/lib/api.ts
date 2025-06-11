@@ -2,8 +2,6 @@ import { ApiResponse, PaginatedResponse, SearchFilters } from '@/types';
 
 // API Configuration
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/.netlify/functions';
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 // API Client class
 class ApiClient {
@@ -145,12 +143,6 @@ export const handleApiError = (error: any): ApiError => {
 
   return new ApiError(error.message || 'Network error');
 };
-
-// Configuration helpers
-export const getSupabaseConfig = () => ({
-  url: SUPABASE_URL,
-  anonKey: SUPABASE_ANON_KEY,
-});
 
 // File upload helper
 export const uploadFile = async (file: File, endpoint: string): Promise<ApiResponse<{ url: string; id: string }>> => {

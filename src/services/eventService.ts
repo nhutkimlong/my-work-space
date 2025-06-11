@@ -7,6 +7,7 @@ import {
   ApiResponse,
   Comment 
 } from '@/types';
+import { localStorageService } from './localStorage';
 
 export class EventService {
   private basePath = '/events';

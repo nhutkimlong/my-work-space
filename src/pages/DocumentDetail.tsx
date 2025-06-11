@@ -1,4 +1,4 @@
-import { ArrowLeft, Download, Edit, Trash2, Brain, Eye, FileText } from "lucide-react";
+import { ArrowLeft, Download, Edit, Trash2, Brain, Eye, FileText, Share2, Copy, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useEffect } from "react";
 import { Label } from "@/components/ui/label";
-import { supabaseService, Document } from "@/services/supabaseService";
+import { Document } from "@/types";
+import { localStorageService } from "@/services/localStorage";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
+import { DocumentForm } from "@/components/DocumentForm";
 
 const DocumentDetail = () => {
   const navigate = useNavigate();
@@ -19,38 +23,52 @@ const DocumentDetail = () => {
   const [error, setError] = useState<string | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteConfirm, setIsDeleteConfirm] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
   const [editData, setEditData] = useState<Document | null>(null);
   const [newAttachments, setNewAttachments] = useState<File[]>([]);
+  const [shareLink, setShareLink] = useState("");
+  const [documents, setDocuments] = useState<Document[]>([]);
+
+  const documentTypes = [
+    { value: "công văn", label: "Công văn" },
+    { value: "kế hoạch", label: "Kế hoạch" },
+    { value: "quyết định", label: "Quyết định" },
+    { value: "biên bản", label: "Biên bản" },
+    { value: "tờ trình", label: "Tờ trình" },
+    { value: "nghị định", label: "Nghị định" },
+    { value: "khác", label: "Khác" }
+  ] as const;
 
   useEffect(() => {
-    async function loadDocument() {
-      if (!id) return;
+    const fetchDocument = async () => {
       try {
-        const data = await supabaseService.getDocumentById(id);
-        setDocument(data);
-        setEditData(data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load document');
+        const data = await localStorageService.getDocuments();
+        setDocuments(data);
+        const doc = data.find(d => d.id === id);
+        if (doc) {
+          setDocument(doc);
+          setEditData(doc);
+          setShareLink(`${window.location.origin}/documents/${doc.id}`);
+        }
+      } catch (error) {
+        setError(error instanceof Error ? error.message : 'Failed to load document');
       } finally {
         setLoading(false);
       }
-    }
+    };
 
-    loadDocument();
+    fetchDocument();
   }, [id]);
 
-  const handleSaveEdit = async () => {
-    if (!editData) return;
+  const handleUpdateDocument = async (updatedDoc: Document) => {
     try {
-      const { data, error } = await supabaseService.updateDocument(editData.id, editData);
-      if (error) {
-        setError(error.message);
-        return;
-      }
-      setDocument(data);
+      const updated = await localStorageService.updateDocument(updatedDoc.id, updatedDoc);
+      setDocument(updated);
       setIsEditOpen(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update document');
+      toast.success("Cập nhật văn bản thành công");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Failed to update document');
+      toast.error("Cập nhật văn bản thất bại");
     }
   };
 
@@ -60,18 +78,29 @@ const DocumentDetail = () => {
     }
   };
 
-  const handleDelete = async () => {
+  const handleDeleteDocument = async () => {
     if (!document) return;
     try {
-      const { error } = await supabaseService.deleteDocument(document.id);
-      if (error) {
-        setError(error.message);
-        return;
-      }
+      await localStorageService.deleteDocument(document.id);
       setIsDeleteConfirm(false);
-      navigate("/documents");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete document');
+      toast.success("Xóa văn bản thành công");
+      navigate('/documents');
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Failed to delete document');
+      toast.error("Xóa văn bản thất bại");
+    }
+  };
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(shareLink);
+    toast.success("Đã sao chép liên kết");
+  };
+
+  const handleDownload = () => {
+    if (document?.file_url) {
+      window.open(document.file_url, '_blank');
+    } else {
+      toast.error("Không có tệp để tải xuống");
     }
   };
 
@@ -102,61 +131,14 @@ const DocumentDetail = () => {
             <DialogDescription>Cập nhật thông tin văn bản</DialogDescription>
           </DialogHeader>
           {editData && (
-            <div className="grid gap-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-title">Tên văn bản</Label>
-                <Input id="edit-title" value={editData.title} onChange={e => setEditData({ ...editData, title: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-description">Mô tả</Label>
-                <Textarea id="edit-description" value={editData.description || ""} onChange={e => setEditData({ ...editData, description: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-documentType">Loại văn bản</Label>
-                <select
-                  id="edit-documentType"
-                  className="w-full border rounded px-2 py-1"
-                  value={editData.document_type}
-                  onChange={e => setEditData({ ...editData, document_type: e.target.value as Document['document_type'] })}
-                >
-                  <option value="công văn">Công văn</option>
-                  <option value="báo cáo">Báo cáo</option>
-                  <option value="quyết định">Quyết định</option>
-                  <option value="thông báo">Thông báo</option>
-                  <option value="uploaded">Đã tải lên</option>
-                  <option value="other">Khác</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-aiSummary">Tóm tắt nội dung (AI)</Label>
-                <Textarea id="edit-aiSummary" value={editData.ai_summary || ""} onChange={e => setEditData({ ...editData, ai_summary: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-tags">Từ khóa (cách nhau bởi dấu phẩy)</Label>
-                <Input id="edit-tags" value={editData.tags.join(", ")} onChange={e => setEditData({ ...editData, tags: e.target.value.split(",").map(t => t.trim()) })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-documentCode">Số/Ký hiệu văn bản</Label>
-                <Input id="edit-documentCode" value={editData.document_code || ""} onChange={e => setEditData({ ...editData, document_code: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-issueDate">Ngày ban hành</Label>
-                <Input id="edit-issueDate" type="date" value={editData.issue_date || ""} onChange={e => setEditData({ ...editData, issue_date: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-issuer">Cơ quan ban hành</Label>
-                <Input id="edit-issuer" value={editData.issuer || ""} onChange={e => setEditData({ ...editData, issuer: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-abstract">Trích yếu nội dung</Label>
-                <Textarea id="edit-abstract" value={editData.abstract || ""} onChange={e => setEditData({ ...editData, abstract: e.target.value })} />
-              </div>
-            </div>
+            <DocumentForm
+              initialData={editData}
+              onSubmit={data => handleUpdateDocument({ ...editData, ...data })}
+              onCancel={() => setIsEditOpen(false)}
+              mode="edit"
+              documentsList={documents}
+            />
           )}
-          <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={() => setIsEditOpen(false)}>Hủy</Button>
-            <Button onClick={handleSaveEdit}>Lưu</Button>
-          </div>
         </DialogContent>
       </Dialog>
 
@@ -169,7 +151,25 @@ const DocumentDetail = () => {
           <p>Bạn có chắc chắn muốn xóa văn bản này?</p>
           <div className="flex justify-end gap-2 mt-4">
             <Button variant="outline" onClick={() => setIsDeleteConfirm(false)}>Hủy</Button>
-            <Button variant="destructive" onClick={handleDelete}>Xóa</Button>
+            <Button variant="destructive" onClick={handleDeleteDocument}>Xóa</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog chia sẻ */}
+      <Dialog open={isShareOpen} onOpenChange={setIsShareOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Chia sẻ văn bản</DialogTitle>
+            <DialogDescription>
+              Sao chép liên kết để chia sẻ văn bản này
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2">
+            <Input value={shareLink} readOnly />
+            <Button variant="outline" size="icon" onClick={handleCopyLink}>
+              <Copy className="h-4 w-4" />
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -192,11 +192,11 @@ const DocumentDetail = () => {
         </div>
         
         <div className="flex items-center gap-2">
-          <Button variant="outline" className="flex items-center gap-2">
-            <Eye className="h-4 w-4" />
-            Xem trước
+          <Button variant="outline" className="flex items-center gap-2" onClick={() => setIsShareOpen(true)}>
+            <Share2 className="h-4 w-4" />
+            Chia sẻ
           </Button>
-          <Button variant="outline" className="flex items-center gap-2">
+          <Button variant="outline" className="flex items-center gap-2" onClick={handleDownload}>
             <Download className="h-4 w-4" />
             Tải về
           </Button>
@@ -254,92 +254,43 @@ const DocumentDetail = () => {
               </div>
 
               <Separator />
-
-              <div>
-                <p className="text-sm font-medium text-muted-foreground mb-2">Trích yếu nội dung</p>
-                <p className="text-sm leading-relaxed">{document.abstract || "Chưa có"}</p>
-              </div>
-
-              <div>
-                <p className="text-sm font-medium text-muted-foreground mb-2">Mô tả</p>
-                <p className="text-sm leading-relaxed">{document.description || "Chưa có"}</p>
-              </div>
-
-              <div>
-                <p className="text-sm font-medium text-muted-foreground mb-2">Từ khóa</p>
-                <div className="flex flex-wrap gap-2">
-                  {document.tags.map((tag, index) => (
-                    <Badge key={index} variant="outline">{tag}</Badge>
-                  ))}
-                </div>
-              </div>
-
-              {/* File Info */}
-              <div>
-                <p className="text-sm font-medium text-muted-foreground mb-2">Tệp đính kèm:</p>
-                <div className="flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
-                  <a 
-                    href={document.file_url} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:underline"
-                  >
-                    {document.file_name}
-                  </a>
-                </div>
-              </div>
             </CardContent>
           </Card>
 
-          {/* AI Summary */}
-          {document.ai_summary && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Brain className="h-5 w-5 text-primary" />
-                  Tóm tắt bằng AI
-                </CardTitle>
-                <CardDescription>
-                  Tóm tắt tự động được tạo bởi trí tuệ nhân tạo
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
+          {/* Nội dung tóm tắt (trước đây là AI Summary) */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Brain className="h-5 w-5 text-primary" />
+                Nội dung tóm tắt
+              </CardTitle>
+              <CardDescription>
+                Tóm tắt do người dùng nhập khi thêm hoặc chỉnh sửa văn bản. Bạn có thể sử dụng AI để sinh tóm tắt tự động từ file đính kèm trong tương lai.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {document.abstract && document.abstract.trim() ? (
                 <div className="bg-accent/50 p-4 rounded-lg">
-                  <p className="text-sm leading-relaxed">{document.ai_summary}</p>
+                  <p className="text-sm leading-relaxed">{document.abstract}</p>
                 </div>
-                <div className="flex justify-end mt-4">
-                  <Button variant="outline" size="sm" className="flex items-center gap-2">
-                    <Brain className="h-3 w-3" />
-                    Tạo lại tóm tắt
-                  </Button>
+              ) : (
+                <div className="text-muted-foreground text-sm">
+                  Chưa có tóm tắt cho văn bản này.
                 </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {!document.ai_summary && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Brain className="h-5 w-5 text-primary" />
-                  Tóm tắt bằng AI
-                </CardTitle>
-                <CardDescription>
-                  Chưa có tóm tắt tự động cho văn bản này
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Tạo tóm tắt tự động để nhanh chóng nắm bắt nội dung chính của văn bản.
-                </p>
-                <Button className="flex items-center gap-2">
+              )}
+              <div className="flex justify-end mt-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-2"
+                  onClick={() => toast.info('Tính năng sắp ra mắt: Sử dụng AI để tóm tắt nội dung từ file đính kèm!')}
+                >
                   <Brain className="h-4 w-4" />
-                  Tạo tóm tắt AI
+                  Tóm tắt bằng AI
                 </Button>
-              </CardContent>
-            </Card>
-          )}
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Sidebar */}
@@ -351,49 +302,68 @@ const DocumentDetail = () => {
             </CardHeader>
             <CardContent className="space-y-3">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Tên tệp</p>
-                <p className="text-sm">{document.file_name}</p>
+                <p className="text-sm font-medium text-muted-foreground mb-2">Từ khóa</p>
+                <div className="flex flex-wrap gap-2">
+                  {document.tags && document.tags.length > 0
+                    ? document.tags.map((tag, index) => (
+                        <Badge key={index} variant="outline">{tag}</Badge>
+                      ))
+                    : <span className="text-muted-foreground text-xs">Không có từ khóa</span>
+                  }
+                </div>
               </div>
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Kích thước</p>
-                <p className="text-sm">{(document.file_size / 1024 / 1024).toFixed(2)} MB</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Loại tệp</p>
-                <p className="text-sm">{document.file_type}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Được tạo</p>
-                <p className="text-sm">{new Date(document.created_at).toLocaleString('vi-VN')}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Cập nhật lần cuối</p>
-                <p className="text-sm">{new Date(document.updated_at).toLocaleString('vi-VN')}</p>
+                <p className="text-sm font-medium text-muted-foreground mb-2">Tệp đính kèm</p>
+                {document.file_name && document.file_url ? (
+                  <div className="flex items-center gap-1 text-xs mt-1">
+                    <FileText className="h-4 w-4" />
+                    <a
+                      href={document.file_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline"
+                    >
+                      {document.file_name}
+                    </a>
+                  </div>
+                ) : (
+                  <span className="text-muted-foreground text-xs">Không có tệp đính kèm</span>
+                )}
               </div>
             </CardContent>
           </Card>
 
-          {/* Related Tasks */}
+          {/* Related Documents */}
           <Card>
             <CardHeader>
-              <CardTitle>Công việc liên quan</CardTitle>
+              <CardTitle>Văn bản liên quan</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground text-center py-4">
-                Chưa có công việc nào liên quan đến văn bản này
-              </p>
-            </CardContent>
-          </Card>
-
-          {/* Related Events */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Sự kiện liên quan</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground text-center py-4">
-                Chưa có sự kiện nào liên quan đến văn bản này
-              </p>
+              {document.related_documents && document.related_documents.length > 0 ? (
+                <div className="space-y-2">
+                  {document.related_documents.map((docId) => {
+                    const relatedDoc = documents.find(d => d.id === docId);
+                    return relatedDoc ? (
+                      <a
+                        key={docId}
+                        href={`/documents/${relatedDoc.id}`}
+                        className="flex items-center gap-2 p-2 rounded-lg hover:bg-accent hover:underline cursor-pointer transition"
+                        style={{ textDecoration: 'none', color: 'inherit' }}
+                      >
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{relatedDoc.title}</p>
+                          <p className="text-xs text-muted-foreground">{relatedDoc.document_code}</p>
+                        </div>
+                      </a>
+                    ) : null;
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  Chưa có văn bản liên quan
+                </p>
+              )}
             </CardContent>
           </Card>
         </div>

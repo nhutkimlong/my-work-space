@@ -1,51 +1,21 @@
-import { supabase } from './supabase'
-
-export async function getLocalData(key: string) {
+export function getLocalData(key: string) {
   try {
-    const { data, error } = await supabase
-      .from('app_settings')
-      .select()
-      .eq('key', key)
-      .maybeSingle()
-
-    if (error) {
-      console.error('Error fetching data:', error)
-      return []
-    }
-
+    const data = localStorage.getItem(key);
     if (!data) {
-      return []
+      return [];
     }
-
-    try {
-      return JSON.parse(data.value || '[]')
-    } catch (e) {
-      console.error('Error parsing JSON data:', e)
-      return []
-    }
+    return JSON.parse(data);
   } catch (e) {
-    console.error('Unexpected error:', e)
-    return []
+    console.error('Error getting data from localStorage:', e);
+    return [];
   }
 }
 
-export async function setLocalData(key: string, value: any) {
+export function setLocalData(key: string, value: any) {
   try {
-    const { error } = await supabase
-      .from('app_settings')
-      .upsert({ 
-        key, 
-        value: JSON.stringify(value)
-      }, {
-        onConflict: 'key'
-      })
-
-    if (error) {
-      console.error('Error saving data:', error)
-      throw error
-    }
+    localStorage.setItem(key, JSON.stringify(value));
   } catch (e) {
-    console.error('Unexpected error saving data:', e)
-    throw e
+    console.error('Error saving data to localStorage:', e);
+    throw e;
   }
 } 

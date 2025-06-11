@@ -9,8 +9,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useNavigate } from "react-router-dom";
-import { supabaseService, Document } from "@/services/supabaseService";
+import { Document } from "@/types";
+import { localStorageService } from "@/services/localStorage";
 import { DocumentList } from "@/components/DocumentList";
+import ReactSelect from 'react-select';
+import { DocumentForm } from "@/components/DocumentForm";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 const Documents = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -19,6 +24,7 @@ const Documents = () => {
   const [aiSummary, setAiSummary] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,11 +36,12 @@ const Documents = () => {
 
   const documentTypes = [
     { value: "công văn", label: "Công văn" },
-    { value: "báo cáo", label: "Báo cáo" },
+    { value: "kế hoạch", label: "Kế hoạch" },
     { value: "quyết định", label: "Quyết định" },
-    { value: "thông báo", label: "Thông báo" },
-    { value: "uploaded", label: "Đã tải lên" },
-    { value: "other", label: "Khác" }
+    { value: "biên bản", label: "Biên bản" },
+    { value: "tờ trình", label: "Tờ trình" },
+    { value: "nghị định", label: "Nghị định" },
+    { value: "khác", label: "Khác" }
   ] as const;
 
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
@@ -46,9 +53,9 @@ const Documents = () => {
 
   const [addDocument, setAddDocument] = useState<Omit<Document, 'id' | 'created_at' | 'updated_at'>>({
     title: '',
-    description: '',
     document_code: '',
     issue_date: '',
+    expiration_date: '',
     issuer: '',
     abstract: '',
     file_url: '',
@@ -59,39 +66,84 @@ const Documents = () => {
     tags: [],
     status: 'pending',
     priority: 'low',
-    google_drive_id: null,
-    google_drive_url: null,
-    ai_summary: null,
-    ai_keywords: []
+    google_drive_id: '',
+    google_drive_url: '',
   });
 
-  useEffect(() => {
-    async function loadDocuments() {
-      try {
-        const data = await supabaseService.getDocuments();
-        setDocuments(data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load documents');
-      } finally {
-        setLoading(false);
-      }
-    }
+  const [tagInputValue, setTagInputValue] = useState("");
+  const [isComposing, setIsComposing] = useState(false);
 
-    loadDocuments();
-  }, []);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 9; // Số card mỗi trang
+
+  // Fetch documents using React Query
+  const { data: documentsData = [], isLoading, error: queryError } = useQuery({
+    queryKey: ['documents'],
+    queryFn: () => localStorageService.getDocuments(),
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+
+  // Create document mutation
+  const createDocumentMutation = useMutation({
+    mutationFn: (documentData: Omit<Document, 'id' | 'created_at' | 'updated_at'>) => 
+      localStorageService.createDocument(documentData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+      setIsAddDialogOpen(false);
+      toast.success('Văn bản đã được tạo thành công');
+    },
+    onError: (error) => {
+      toast.error('Không thể tạo văn bản: ' + (error instanceof Error ? error.message : 'Lỗi không xác định'));
+    }
+  });
+
+  // Update document mutation
+  const updateDocumentMutation = useMutation({
+    mutationFn: (updatedDocument: Document) => 
+      localStorageService.updateDocument(updatedDocument.id, updatedDocument),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+      setIsEditDialogOpen(false);
+      toast.success('Văn bản đã được cập nhật thành công');
+    },
+    onError: (error) => {
+      toast.error('Không thể cập nhật văn bản: ' + (error instanceof Error ? error.message : 'Lỗi không xác định'));
+    }
+  });
+
+  // Delete document mutation
+  const deleteDocumentMutation = useMutation({
+    mutationFn: (id: string) => localStorageService.deleteDocument(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+      toast.success('Văn bản đã được xóa thành công');
+    },
+    onError: (error) => {
+      toast.error('Không thể xóa văn bản: ' + (error instanceof Error ? error.message : 'Lỗi không xác định'));
+    }
+  });
+
+  const handleCreateDocument = async (documentData: Omit<Document, 'id' | 'created_at' | 'updated_at'>) => {
+    createDocumentMutation.mutate(documentData);
+  };
+
+  const handleDeleteDocument = async (id: string) => {
+    deleteDocumentMutation.mutate(id);
+  };
+
+  const handleUpdateDocument = async (updatedDocument: Document) => {
+    updateDocumentMutation.mutate(updatedDocument);
+  };
 
   const handleAddDocument = async () => {
     try {
-      const newDoc = await supabaseService.createDocument({
+      const newDoc = await localStorageService.createDocument({
         ...addDocument,
-        google_drive_id: null,
-        google_drive_url: null
       });
       setDocuments([...documents, newDoc]);
       setIsAddDialogOpen(false);
       setAddDocument({
         title: '',
-        description: '',
         document_code: '',
         issue_date: '',
         issuer: '',
@@ -104,13 +156,11 @@ const Documents = () => {
         tags: [],
         status: 'pending',
         priority: 'low',
-        google_drive_id: null,
-        google_drive_url: null,
-        ai_summary: null,
-        ai_keywords: []
+        google_drive_id: '',
+        google_drive_url: '',
       });
     } catch (error) {
-      console.error('Error adding document:', error);
+      console.error("Error adding document:", error);
     }
   };
 
@@ -127,28 +177,11 @@ const Documents = () => {
 
   const handleEditSave = async (updatedDoc: Document) => {
     try {
-      const { data, error } = await supabaseService.updateDocument(updatedDoc.id, updatedDoc);
-      if (error) {
-        setError(error.message);
-        return;
-      }
-      setDocuments(prev => prev.map(doc => doc.id === updatedDoc.id ? data : doc));
+      const updated = await localStorageService.updateDocument(updatedDoc.id, updatedDoc);
+      setDocuments(documents.map(doc => doc.id === updated.id ? updated : doc));
       setIsEditDialogOpen(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update document');
-    }
-  };
-
-  const handleDeleteDocument = async (id: string) => {
-    try {
-      const { error } = await supabaseService.deleteDocument(id);
-      if (error) {
-        setError(error.message);
-        return;
-      }
-      setDocuments(prev => prev.filter(doc => doc.id !== id));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete document');
+    } catch (error) {
+      console.error("Error updating document:", error);
     }
   };
 
@@ -190,23 +223,37 @@ const Documents = () => {
     setIsFilterDialogOpen(false);
   };
 
-  const filteredDocuments = documents.filter(doc => {
+  if (isLoading) {
+    return <div className="p-4">Loading documents...</div>;
+  }
+
+  if (queryError) {
+    return <div className="p-4 text-red-500">Error: {queryError instanceof Error ? queryError.message : 'An error occurred'}</div>;
+  }
+
+  const filteredDocuments = documentsData.filter(doc => {
     const matchType = !filterType || filterType === "__all__" || doc.document_type === filterType;
     const matchIssuer = !filterIssuer || doc.title.toLowerCase().includes(filterIssuer.toLowerCase());
     const matchDateFrom = !filterDateFrom || doc.created_at >= filterDateFrom;
     const matchDateTo = !filterDateTo || doc.created_at <= filterDateTo;
     const matchTags = !filterTags || filterTags.split(",").every(tag => doc.tags.map(t => t.toLowerCase()).includes(tag.trim().toLowerCase()));
-    const matchSearch = doc.title.toLowerCase().includes(searchQuery.toLowerCase()) || doc.description?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchSearch = doc.title.toLowerCase().includes(searchQuery.toLowerCase()) || doc.abstract?.toLowerCase().includes(searchQuery.toLowerCase());
     return matchType && matchIssuer && matchDateFrom && matchDateTo && matchTags && matchSearch;
   });
 
-  if (loading) {
-    return <div className="p-4">Loading documents...</div>;
-  }
+  // Sắp xếp văn bản mới nhất lên đầu
+  const sortedDocuments = [...filteredDocuments].sort((a, b) => {
+    const dateA = new Date(a.issue_date || a.created_at || 0);
+    const dateB = new Date(b.issue_date || b.created_at || 0);
+    return dateB.getTime() - dateA.getTime();
+  });
 
-  if (error) {
-    return <div className="p-4 text-red-500">Error: {error}</div>;
-  }
+  // Phân trang
+  const totalPages = Math.ceil(sortedDocuments.length / pageSize);
+  const paginatedDocuments = sortedDocuments.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -218,44 +265,14 @@ const Documents = () => {
             <DialogDescription>Cập nhật thông tin văn bản</DialogDescription>
           </DialogHeader>
           {editDoc && (
-            <div className="grid gap-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-title">Tên văn bản</Label>
-                <Input id="edit-title" value={editDoc.title} onChange={e => setEditDoc({ ...editDoc, title: e.target.value })} />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="edit-documentType">Loại văn bản</Label>
-                  <Select value={editDoc.document_type} onValueChange={val => setEditDoc({ ...editDoc, document_type: val })}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Chọn loại văn bản" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {documentTypes.map(type => (
-                        <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-aiSummary">Tóm tắt nội dung (AI)</Label>
-                <Textarea id="edit-aiSummary" value={editDoc.ai_summary || ""} onChange={e => setEditDoc({ ...editDoc, ai_summary: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-tags">Từ khóa (cách nhau bởi dấu phẩy)</Label>
-                <Input id="edit-tags" value={editDoc.tags.join(", ")} onChange={e => setEditDoc({ ...editDoc, tags: e.target.value.split(",").map(t => t.trim()) })} />
-              </div>
-            </div>
+            <DocumentForm
+              initialData={editDoc}
+              onSubmit={data => handleUpdateDocument({ ...editDoc, ...data })}
+              onCancel={() => setIsEditDialogOpen(false)}
+              mode="edit"
+              documentsList={documentsData}
+            />
           )}
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-              Hủy
-            </Button>
-            <Button onClick={() => handleEditSave(editDoc)}>
-              Lưu
-            </Button>
-          </div>
         </DialogContent>
       </Dialog>
       <div className="flex justify-between items-center">
@@ -280,69 +297,13 @@ const Documents = () => {
                 Nhập thông tin chi tiết của văn bản
               </DialogDescription>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="title">Tên văn bản</Label>
-                <Input id="title" value={addDocument.title} onChange={e => setAddDocument({ ...addDocument, title: e.target.value })} placeholder="VD: Quyết định về việc phê duyệt..." />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="documentCode">Số/Ký hiệu văn bản</Label>
-                  <Input id="documentCode" value={addDocument.document_code} onChange={e => setAddDocument({ ...addDocument, document_code: e.target.value })} placeholder="VD: 123/QĐ-UBND" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="documentType">Loại văn bản</Label>
-                  <Select value={addDocument.document_type} onValueChange={val => setAddDocument({ ...addDocument, document_type: val as Document['document_type'] })}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Chọn loại văn bản" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {documentTypes.map(type => (
-                        <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="issueDate">Ngày ban hành</Label>
-                  <Input id="issueDate" type="date" value={addDocument.issue_date} onChange={e => setAddDocument({ ...addDocument, issue_date: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="issuer">Cơ quan ban hành</Label>
-                  <Input id="issuer" value={addDocument.issuer} onChange={e => setAddDocument({ ...addDocument, issuer: e.target.value })} placeholder="VD: UBND tỉnh" />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="abstract">Trích yếu nội dung</Label>
-                <Textarea id="abstract" value={addDocument.abstract} onChange={e => setAddDocument({ ...addDocument, abstract: e.target.value })} placeholder="Nhập trích yếu nội dung văn bản..." />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="description">Nội dung chi tiết</Label>
-                <Textarea id="description" value={addDocument.description} onChange={e => setAddDocument({ ...addDocument, description: e.target.value })} placeholder="Nhập nội dung chi tiết văn bản..." />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="file">Tệp đính kèm</Label>
-                <Input id="file" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" multiple onChange={e => setFiles(e.target.files ? Array.from(e.target.files) : [])} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="aiSummary">Tóm tắt nội dung (AI)</Label>
-                <Textarea id="aiSummary" placeholder="Tóm tắt sẽ được sinh tự động từ AI hoặc nhập tay..." rows={3} value={addDocument.ai_summary} onChange={e => setAddDocument({ ...addDocument, ai_summary: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="tags">Từ khóa (cách nhau bởi dấu phẩy)</Label>
-                <Input id="tags" value={addDocument.tags.join(", ")} onChange={e => setAddDocument({ ...addDocument, tags: e.target.value.split(",").map(t => t.trim()) })} placeholder="VD: kinh tế, kế hoạch, 2024" />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                Hủy
-              </Button>
-              <Button onClick={handleAddDocument}>
-                Lưu văn bản
-              </Button>
-            </div>
+            <DocumentForm
+              initialData={{}}
+              onSubmit={handleCreateDocument}
+              onCancel={() => setIsAddDialogOpen(false)}
+              mode="add"
+              documentsList={documentsData}
+            />
           </DialogContent>
         </Dialog>
       </div>
@@ -366,73 +327,58 @@ const Documents = () => {
 
       {/* Documents Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {filteredDocuments.map((doc, index) => (
+        {paginatedDocuments.map((doc, index) => (
           <Card key={doc.id} className="animate-scale-in" style={{ animationDelay: `${index * 100}ms` }}>
             <CardHeader className="pb-3">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <CardTitle className="text-base">{doc.title || "Chưa có tên"}</CardTitle>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Badge variant="secondary" className="text-xs">
-                      {doc.document_type}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">{doc.created_at}</span>
-                  </div>
-                </div>
+              <CardTitle className="text-base font-semibold mb-1">{doc.title || "Chưa có tên"}</CardTitle>
+              <div className="flex flex-wrap items-center gap-1 text-xs mb-1">
+                {doc.document_code && (
+                  <>
+                    <Badge className="font-semibold bg-blue-100 text-blue-800 border-blue-200">{doc.document_code}</Badge>
+                    <span className="mx-1 text-gray-400">·</span>
+                  </>
+                )}
+                <Badge className="font-semibold bg-yellow-100 text-yellow-800 border-yellow-200">
+                  {doc.issue_date ? new Date(doc.issue_date).toLocaleDateString('vi-VN') : "Chưa có ngày"}
+                </Badge>
+                <span className="mx-1 text-gray-400">·</span>
+                <Badge className="font-semibold bg-purple-100 text-purple-800 border-purple-200">{doc.issuer || "Chưa rõ CQBH"}</Badge>
               </div>
-            </CardHeader>
-            
-            <CardContent className="space-y-3">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Số/Ký hiệu:</p>
-                <p className="text-sm">{doc.document_code || "Chưa có"}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Cơ quan ban hành:</p>
-                <p className="text-sm">{doc.issuer || "Chưa có"}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Trích yếu:</p>
-                <p className="text-sm line-clamp-2">{doc.abstract || "Chưa có"}</p>
-              </div>
-
-              {doc.tags && (
-                <div className="flex flex-wrap gap-1">
+              {doc.abstract && (
+                <p
+                  className="text-xs text-gray-500 mb-1 clamp-2"
+                  title={doc.abstract}
+                >
+                  {doc.abstract}
+                </p>
+              )}
+              {doc.tags && doc.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1 mb-1">
                   {doc.tags.map((tag, tagIndex) => (
-                    <Badge key={tagIndex} variant="outline" className="text-xs">
-                      {tag}
-                    </Badge>
+                    <Badge key={tagIndex} variant="outline" className="text-xs px-2 py-0.5">{tag}</Badge>
                   ))}
                 </div>
               )}
-
-              {doc.ai_summary && (
-                <div className="bg-accent/50 p-3 rounded-lg">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Brain className="h-3 w-3 text-primary" />
-                    <span className="text-xs font-medium text-primary">Tóm tắt AI</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">{doc.ai_summary}</p>
+              {doc.file_name && (
+                <div className="flex items-center gap-1 text-xs mt-1">
+                  <FileText className="h-3 w-3" />
+                  {doc.file_url ? (
+                    <a
+                      href={doc.file_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline"
+                    >
+                      {doc.file_name}
+                    </a>
+                  ) : (
+                    <span>{doc.file_name}</span>
+                  )}
                 </div>
               )}
-
-              {/* Hiển thị file đính kèm ở cuối cùng */}
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Tệp đính kèm:</p>
-                <div className="flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
-                  <a 
-                    href={doc.file_url} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:underline"
-                  >
-                    {doc.file_name}
-                  </a>
-                </div>
-              </div>
-
-              <div className="flex justify-between pt-2 border-t">
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="flex justify-between border-t pt-2 mt-2">
                 <Button variant="ghost" size="sm" className="flex items-center gap-1" onClick={() => navigate(`/documents/${doc.id}`)}>
                   <Eye className="h-3 w-3" />
                   Xem
@@ -441,12 +387,6 @@ const Documents = () => {
                   <Edit className="h-3 w-3" />
                   Sửa
                 </Button>
-                {!doc.ai_summary && (
-                  <Button variant="ghost" size="sm" className="flex items-center gap-1 text-primary">
-                    <Brain className="h-3 w-3" />
-                    Tóm tắt AI
-                  </Button>
-                )}
                 <Button variant="ghost" size="sm" className="flex items-center gap-1 text-destructive" onClick={() => handleDeleteDocument(doc.id)}>
                   <Trash2 className="h-3 w-3" />
                   Xóa
@@ -457,11 +397,20 @@ const Documents = () => {
         ))}
       </div>
 
-      {filteredDocuments.length === 0 && (
+      {paginatedDocuments.length === 0 && (
         <div className="text-center py-12">
           <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <h3 className="text-lg font-medium">Không tìm thấy văn bản</h3>
           <p className="text-muted-foreground">Thử thay đổi từ khóa tìm kiếm hoặc thêm văn bản mới</p>
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex justify-center gap-2 mt-4">
+          <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setCurrentPage(currentPage - 1)}>Trang trước</Button>
+          <span className="px-2 py-1 text-sm">Trang {currentPage} / {totalPages}</span>
+          <Button variant="outline" size="sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(currentPage + 1)}>Trang sau</Button>
         </div>
       )}
 
@@ -515,3 +464,14 @@ const Documents = () => {
 };
 
 export default Documents;
+
+/* Thêm CSS ở cuối file hoặc vào file global */
+/*
+.clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+*/

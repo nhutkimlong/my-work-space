@@ -21,23 +21,25 @@ export interface Document {
   id: string;
   title: string;
   description?: string;
-  file_url: string;
-  file_name: string;
-  file_size: number;
-  file_type: string;
-  document_type: DocumentType;
+  document_code?: string;
+  issue_date?: string;
+  expiration_date?: string;
+  issuer?: string;
+  abstract?: string;
+  ai_summary?: string;
+  file_url?: string;
+  file_name?: string;
+  file_size?: number;
+  file_type?: string;
+  document_type: string;
   tags: string[];
-  status: Status;
-  priority: Priority;
-  created_by: string;
-  assigned_to?: string[];
-  due_date?: string;
+  status: 'pending' | 'in_progress' | 'completed';
+  priority: 'low' | 'medium' | 'high';
+  google_drive_id?: string;
+  google_drive_url?: string;
+  related_documents?: string[];
   created_at: string;
   updated_at: string;
-  ai_summary?: string;
-  ai_extracted_text?: string;
-  ai_keywords?: string[];
-  google_drive_id?: string;
 }
 
 // Task interface
@@ -45,35 +47,19 @@ export interface Task {
   id: string;
   title: string;
   description?: string;
-  status: Status;
-  priority: Priority;
-  assigned_to: string[];
+  status: 'pending' | 'in_progress' | 'completed';
+  priority: 'low' | 'medium' | 'high';
+  assigned_to?: string[];
   created_by: string;
   due_date?: string;
   start_date?: string;
   estimated_hours?: number;
   actual_hours?: number;
-  progress: number; // 0-100
+  progress: number;
   tags: string[];
-  subtasks: SubTask[];
-  attachments: Attachment[];
-  comments: Comment[];
-  created_at: string;
-  updated_at: string;
-  ai_suggestions?: AISuggestion[];
+  attachments?: Attachment[];
   related_documents?: string[];
   related_events?: string[];
-}
-
-// SubTask interface
-export interface SubTask {
-  id: string;
-  task_id: string;
-  title: string;
-  description?: string;
-  status: Status;
-  assigned_to?: string;
-  due_date?: string;
   created_at: string;
   updated_at: string;
 }
@@ -83,24 +69,21 @@ export interface Event {
   id: string;
   title: string;
   description?: string;
-  event_type: EventType;
+  event_type: string;
   start_date: string;
   end_date: string;
   location?: string;
   meeting_link?: string;
-  attendees: string[];
+  attendees?: string[];
   organizer: string;
   agenda?: string[];
-  status: Status;
-  priority: Priority;
+  status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+  priority: 'low' | 'medium' | 'high';
   tags: string[];
-  attachments: Attachment[];
+  document_id?: string;
+  department?: string;
   created_at: string;
   updated_at: string;
-  ai_summary?: string;
-  ai_action_items?: string[];
-  related_tasks?: string[];
-  related_documents?: string[];
 }
 
 // Comment interface
@@ -148,25 +131,18 @@ export interface AIInsight {
 }
 
 // Dashboard data interfaces
-export interface DashboardStats {
-  total_tasks: number;
-  completed_tasks: number;
-  pending_tasks: number;
-  overdue_tasks: number;
-  total_documents: number;
-  recent_documents: number;
-  total_events: number;
-  upcoming_events: number;
-  completion_rate: number;
-  productivity_score: number;
-}
-
 export interface DashboardData {
-  stats: DashboardStats;
-  recent_activities: Activity[];
-  upcoming_deadlines: (Task | Event)[];
-  ai_insights: AIInsight[];
-  quick_metrics: QuickMetric[];
+  totalDocuments: number;
+  totalTasks: number;
+  totalEvents: number;
+  recentDocuments: Document[];
+  recentTasks: Task[];
+  upcomingEvents: Event[];
+  taskStatus: {
+    pending: number;
+    inProgress: number;
+    completed: number;
+  };
 }
 
 export interface Activity {

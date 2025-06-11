@@ -10,6 +10,7 @@ import {
   SubTask,
   Comment 
 } from '@/types';
+import { localStorageService } from './localStorage';
 
 export class TaskService {
   private basePath = '/tasks';

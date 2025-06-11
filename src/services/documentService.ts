@@ -8,6 +8,7 @@ import {
   DocumentStatistics,
   Comment 
 } from '@/types';
+import { localStorageService } from './localStorage';
 
 export class DocumentService {
   private basePath = '/documents';

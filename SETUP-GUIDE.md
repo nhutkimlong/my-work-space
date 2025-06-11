@@ -264,3 +264,203 @@ Nếu gặp vấn đề, hãy:
 3. Báo cáo và analytics nâng cao
 4. Mobile app với React Native
 5. Notifications qua email/SMS 
+
+# Hướng Dẫn Cài Đặt
+
+## 1. Yêu Cầu Hệ Thống
+
+### Frontend
+- Node.js 18+
+- npm hoặc yarn
+- Modern web browser
+
+### Backend
+- Node.js 18+
+- Netlify CLI
+- Google Cloud Platform account
+
+## 2. Cài Đặt
+
+### 1. Clone Repository
+```bash
+git clone https://github.com/your-org/quan-ly-cong-viec-so.git
+cd quan-ly-cong-viec-so
+```
+
+### 2. Cài Đặt Dependencies
+```bash
+npm install
+# hoặc
+yarn install
+```
+
+### 3. Cấu Hình Môi Trường
+1. Copy file `.env.example` thành `.env`:
+```bash
+cp .env.example .env
+```
+
+2. Cập nhật các biến môi trường trong file `.env`:
+```env
+# Frontend Environment Variables
+NODE_ENV=development
+VITE_API_URL=http://localhost:8888/.netlify/functions
+
+# Google Drive API Configuration
+VITE_GOOGLE_CLIENT_ID=your_google_client_id
+VITE_GOOGLE_API_KEY=your_google_api_key
+
+# Netlify Configuration
+NETLIFY_DEV=true
+NETLIFY_FUNCTIONS_PATH=netlify/functions
+
+# Google Drive API Configuration (for Netlify Functions)
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+GOOGLE_API_KEY=your_google_api_key
+
+# OpenAI Configuration (for Netlify Functions)
+OPENAI_API_KEY=your_openai_api_key
+
+# Other Configuration
+MAX_FILE_SIZE=10485760 # 10MB in bytes
+ALLOWED_FILE_TYPES=application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain
+```
+
+### 4. Cấu Hình Google Drive API
+1. Tạo project mới trên [Google Cloud Console](https://console.cloud.google.com)
+2. Bật Google Drive API
+3. Tạo OAuth 2.0 credentials
+4. Cấu hình OAuth consent screen
+5. Thêm authorized redirect URIs:
+   - `http://localhost:5173`
+   - `http://localhost:8888/.netlify/functions/auth-callback`
+
+### 5. Chạy Ứng Dụng
+```bash
+npm run dev
+# hoặc
+yarn dev
+```
+
+## 3. Cấu Trúc Dữ Liệu
+
+### Documents
+```typescript
+interface Document {
+  id: string;
+  title: string;
+  description?: string;
+  file_url: string;
+  file_name: string;
+  file_size: number;
+  file_type: string;
+  document_type: string;
+  tags: string[];
+  status: 'pending' | 'processing' | 'completed' | 'error';
+  priority: 'low' | 'medium' | 'high';
+  created_by: string;
+  assigned_to: string[];
+  due_date?: Date;
+  created_at: Date;
+  updated_at: Date;
+  ai_summary?: string;
+  ai_extracted_text?: string;
+  ai_keywords?: string[];
+  google_drive_id?: string;
+}
+```
+
+### Tasks
+```typescript
+interface Task {
+  id: string;
+  title: string;
+  description?: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'on_hold';
+  priority: 'low' | 'medium' | 'high';
+  assigned_to: string[];
+  created_by: string;
+  due_date?: Date;
+  start_date?: Date;
+  estimated_hours?: number;
+  actual_hours?: number;
+  progress: number;
+  tags: string[];
+  created_at: Date;
+  updated_at: Date;
+}
+```
+
+### Events
+```typescript
+interface Event {
+  id: string;
+  title: string;
+  description?: string;
+  event_type: string;
+  start_date: Date;
+  end_date: Date;
+  location?: string;
+  meeting_link?: string;
+  attendees: string[];
+  organizer: string;
+  agenda: string[];
+  status: 'pending' | 'confirmed' | 'cancelled';
+  priority: 'low' | 'medium' | 'high';
+  tags: string[];
+  created_at: Date;
+  updated_at: Date;
+}
+```
+
+## 4. Xử Lý Lỗi
+
+### 1. Lỗi Kết Nối
+- Kiểm tra kết nối internet
+- Kiểm tra cấu hình môi trường
+- Kiểm tra logs trong console
+
+### 2. Lỗi Google Drive
+- Kiểm tra Google Drive API credentials
+- Kiểm tra OAuth consent screen
+- Kiểm tra authorized redirect URIs
+
+### 3. Lỗi LocalStorage
+- Kiểm tra dung lượng localStorage
+- Xóa cache và dữ liệu cũ
+- Kiểm tra quyền truy cập localStorage
+
+## 5. Bảo Mật
+
+### 1. Xác Thực
+- Sử dụng Google OAuth 2.0
+- Lưu trữ token trong localStorage
+- Refresh token tự động
+
+### 2. Phân Quyền
+- Role-based access control
+- Kiểm tra quyền truy cập
+- Validate dữ liệu đầu vào
+
+### 3. Bảo Vệ Dữ Liệu
+- Mã hóa dữ liệu nhạy cảm
+- Backup dữ liệu định kỳ
+- Xóa dữ liệu cũ
+
+## 6. Tối Ưu Hóa
+
+### 1. Hiệu Suất
+- Lazy loading components
+- Code splitting
+- Caching dữ liệu
+
+### 2. Dung Lượng
+- Nén assets
+- Tối ưu hóa images
+- Cleanup dữ liệu cũ
+
+### 3. UX
+- Loading states
+- Error handling
+- Responsive design 

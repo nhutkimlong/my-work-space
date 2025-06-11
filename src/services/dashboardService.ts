@@ -10,13 +10,14 @@ import {
   Event,
   Document 
 } from '@/types';
+import { localStorageService } from './localStorage';
 
 export class DashboardService {
   private basePath = '/dashboard';
 
   // Get comprehensive dashboard data
-  async getDashboardData(): Promise<ApiResponse<DashboardData>> {
-    return apiClient.get(this.basePath);
+  async getDashboardData(): Promise<DashboardData> {
+    return localStorageService.getDashboardData();
   }
 
   // Get dashboard statistics
